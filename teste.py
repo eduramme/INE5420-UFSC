@@ -3,6 +3,11 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QGraphicsScene, QGraphics
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QPen, QColor
 
+
+pen = QPen(QColor(128, 0, 128))  # Black color
+pen.setWidth(2)  # Set pen w
+
+
 class DisplayFileItem:
     def __init__(self, name, item_type, coordinates):
         self.name = name
@@ -37,16 +42,20 @@ class Viewport(QGraphicsView):
 
     def draw_point(self, coordinates):
         x, y = coordinates
-        self.scene().addEllipse(x, y, 2, 2, QPen())
+        self.scene().addEllipse(x, y, 2, 2, pen)
 
     def draw_line(self, coordinates):
         x1, y1, x2, y2 = coordinates
-        self.scene().addLine(x1, y1, x2, y2, QPen())
+        self.scene().addLine(x1, y1, x2, y2, pen)
 
     def draw_wireframe(self, coordinates):
-        x1, y1, x2, y2,x3,y3 = coordinates
-        self.scene().addLine(x1, y1, x2, y2, QPen())
-        self.scene().addLine(x2, y2, x3, y3, QPen())
+        if len(coordinates) < 6:  # Precisa de pelo menos 3 pontos (6 coordenadas) para formar um wireframe
+            return
+        # Desenha linhas entre pontos sequenciais
+        for i in range(0, len(coordinates) - 2, 2):
+            self.scene().addLine(coordinates[i], coordinates[i+1], coordinates[i+2], coordinates[i+3], pen)
+        # Fecha o polígono conectando o último ponto ao primeiro
+        self.scene().addLine(coordinates[-2], coordinates[-1], coordinates[0], coordinates[1], pen)
 
 
 class MainWindow(QMainWindow):
@@ -98,25 +107,42 @@ class MainWindow(QMainWindow):
         self.viewport.scale(0.8, 0.8)
 
     def draw_point(self):
-
-        form_window = FormWindow()
+        form_window = FormWindow("point")
         form_window.exec()
 
         listPoints = form_window.readlist()
-        ponto = DisplayFileItem("ponto", "point", (int(listPoints[0]),int(listPoints[1])))
-        self.display_file.add_item(ponto)
-        print(self.display_file.items)
-        self.viewport.draw_point(self.display_file)
+        if listPoints and isinstance(listPoints[0], tuple) and len(listPoints[0]) == 2:
+            # Garante que o ponto seja desenhado corretamente.
+            ponto = DisplayFileItem("ponto", "point", listPoints[0])
+            self.display_file.add_item(ponto)
+            self.viewport.draw_items(self.display_file)
+        else:
+            print("Input is not a valid point.")
 
     def draw_line(self):
-        linha = DisplayFileItem("linha1", "line", (10,20,30,40))
+        form_window = FormWindow("line")
+        form_window.exec()
+
+        listPoints = form_window.readlist()
+        print(listPoints)
+
+        # if len(listPoints) >= 4:  # Verifica se tem coordenadas suficientes para uma linha
+        linha = DisplayFileItem("linha", "line", listPoints[0])  # Pega as primeiras 4 coordenadas
         self.display_file.add_item(linha)
         self.viewport.draw_items(self.display_file)
+        # else:
+        #     print("Not enough arguments")
 
     def draw_wireframe(self):
-        wireframe = DisplayFileItem("wireframe1", "wireframe", (70,20,30,40,50,60))
-        self.display_file.add_item(wireframe)
-        self.viewport.draw_items(self.display_file)
+        form_window = FormWindow("wireframe")
+        form_window.exec()
+
+        listPoints = form_window.readlist()
+        if len(listPoints) >= 6:  # Verifica se tem coordenadas suficientes para um wireframe
+            wireframe = DisplayFileItem("wireframe", "wireframe", tuple(listPoints))
+            self.display_file.add_item(wireframe)
+            self.viewport.draw_items(self.display_file)
+
 
 
     def on_submit(self):
@@ -125,23 +151,16 @@ class MainWindow(QMainWindow):
 
 
 class FormWindow(QDialog):
-    def __init__(self):
+    def __init__(self, item_type):
         super().__init__()
-
-        self.listReturn = []
-        self.setWindowTitle("Form Window")
-
+        self.item_type = item_type
+        self.setWindowTitle("Enter Coordinates")
         layout = QVBoxLayout()
 
-        self.name_label = QLabel("Name:")
-        self.name_input = QLineEdit()
-        layout.addWidget(self.name_label)
-        layout.addWidget(self.name_input)
-
-        self.email_label = QLabel("Email:")
-        self.email_input = QLineEdit()
-        layout.addWidget(self.email_label)
-        layout.addWidget(self.email_input)
+        self.coords_label = QLabel("Coordinates:")
+        self.coords_input = QLineEdit()
+        layout.addWidget(self.coords_label)
+        layout.addWidget(self.coords_input)
 
         self.submit_button = QPushButton("Submit")
         self.submit_button.clicked.connect(self.submit_form)
@@ -150,17 +169,24 @@ class FormWindow(QDialog):
         self.setLayout(layout)
 
     def submit_form(self):
-        name = self.name_input.text()
-        email = self.email_input.text()
-        self.listReturn.append(name)
-        self.listReturn.append(email)
-
-        print(self.listReturn)
-        print(f"Name: {name}, Email: {email}")
+        coords_str = self.coords_input.text()
+        try:
+            # Tenta interpretar a entrada como uma lista de tuplas
+            # Por exemplo: "(10, 20)"
+            points = eval(coords_str)
+            if isinstance(points, tuple):
+                self.listReturn = [points]  # Coloca o ponto em uma lista
+            else:
+                self.listReturn = []
+                print("Entered coordinates do not match the format for a point.")
+        except:
+            self.listReturn = []
+            print("Error parsing coordinates")
         self.close()
 
-    def readlist(self):
+    def readlist(self):  # Corrigido a indentação aqui
         return self.listReturn
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
