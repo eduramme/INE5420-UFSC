@@ -2,6 +2,7 @@ import sys
 from PyQt6.QtWidgets import QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QVBoxLayout, QWidget, QPushButton, QToolBar,QLineEdit,QFormLayout, QDialog, QLabel
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QPen, QColor
+import ast
 
 
 pen = QPen(QColor(128, 0, 128))  # Black color
@@ -27,11 +28,13 @@ class DisplayFile:
 class Viewport(QGraphicsView):
     def __init__(self):
         super().__init__()
-        self.setScene(QGraphicsScene())
+        self.cena = QGraphicsScene(0, 0, 1600, 1200)
+        self.setScene(self.cena)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        
 
     def draw_items(self, display_file):
-        self.scene().clear()
+        self.cena.clear
         for item in display_file.items:
             if item.item_type == 'point':
                 self.draw_point(item.coordinates)
@@ -42,21 +45,17 @@ class Viewport(QGraphicsView):
 
     def draw_point(self, coordinates):
         x, y = coordinates
-        self.scene().addEllipse(x, y, 2, 2, pen)
+        self.cena.addEllipse(x, y, 2, 2, pen)
 
     def draw_line(self, coordinates):
         x1, y1, x2, y2 = coordinates
-        self.scene().addLine(x1, y1, x2, y2, pen)
+        self.cena.addLine(x1, y1, x2, y2, pen)
 
-    def draw_wireframe(self, coordinates):
-        if len(coordinates) < 6:  # Precisa de pelo menos 3 pontos (6 coordenadas) para formar um wireframe
-            return
-        # Desenha linhas entre pontos sequenciais
-        for i in range(0, len(coordinates) - 2, 2):
-            self.scene().addLine(coordinates[i], coordinates[i+1], coordinates[i+2], coordinates[i+3], pen)
-        # Fecha o polígono conectando o último ponto ao primeiro
-        self.scene().addLine(coordinates[-2], coordinates[-1], coordinates[0], coordinates[1], pen)
-
+    def draw_wireframe(self, vertices):
+        # Draw the triangle by connecting the vertices
+        self.cena.addLine(vertices[0][0], vertices[0][1], vertices[1][0], vertices[1][1], pen)
+        self.cena.addLine(vertices[1][0], vertices[1][1], vertices[2][0], vertices[2][1], pen)
+        self.cena.addLine(vertices[2][0], vertices[2][1], vertices[0][0], vertices[0][1], pen)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -109,41 +108,30 @@ class MainWindow(QMainWindow):
     def draw_point(self):
         form_window = FormWindow("point")
         form_window.exec()
-
         listPoints = form_window.readlist()
-        if listPoints and isinstance(listPoints[0], tuple) and len(listPoints[0]) == 2:
-            # Garante que o ponto seja desenhado corretamente.
-            ponto = DisplayFileItem("ponto", "point", listPoints[0])
-            self.display_file.add_item(ponto)
-            self.viewport.draw_items(self.display_file)
-        else:
-            print("Input is not a valid point.")
+        ponto = DisplayFileItem("ponto", "point", listPoints)
+        self.display_file.add_item(ponto)
+        self.viewport.draw_items(self.display_file)
+
 
     def draw_line(self):
         form_window = FormWindow("line")
         form_window.exec()
-
         listPoints = form_window.readlist()
         print(listPoints)
-
-        # if len(listPoints) >= 4:  # Verifica se tem coordenadas suficientes para uma linha
-        linha = DisplayFileItem("linha", "line", listPoints[0])  # Pega as primeiras 4 coordenadas
+        linha = DisplayFileItem("linha", "line", listPoints)  # Pega as primeiras 4 coordenadas
         self.display_file.add_item(linha)
         self.viewport.draw_items(self.display_file)
-        # else:
-        #     print("Not enough arguments")
+
 
     def draw_wireframe(self):
         form_window = FormWindow("wireframe")
         form_window.exec()
-
         listPoints = form_window.readlist()
-        if len(listPoints) >= 6:  # Verifica se tem coordenadas suficientes para um wireframe
-            wireframe = DisplayFileItem("wireframe", "wireframe", tuple(listPoints))
-            self.display_file.add_item(wireframe)
-            self.viewport.draw_items(self.display_file)
-
-
+        print("list ", listPoints)
+        wireframe = DisplayFileItem("wireframe", "wireframe", tuple(listPoints))
+        self.display_file.add_item(wireframe)
+        self.viewport.draw_wireframe(listPoints)
 
     def on_submit(self):
         text = self.input_box.text()
@@ -170,37 +158,16 @@ class FormWindow(QDialog):
 
     def submit_form(self):
         coords_str = self.coords_input.text()
-        try:
-            # Tenta interpretar a entrada como uma lista de tuplas
-            # Por exemplo: "(10, 20)"
-            points = eval(coords_str)
-            if isinstance(points, tuple):
-                self.listReturn = [points]  # Coloca o ponto em uma lista
-            else:
-                self.listReturn = []
-                print("Entered coordinates do not match the format for a point.")
-        except:
-            self.listReturn = []
-            print("Error parsing coordinates")
+        list_of_tuples = ast.literal_eval(coords_str)
+        self.listReturn = list_of_tuples  # Coloca o ponto em uma lista
         self.close()
 
     def readlist(self):  # Corrigido a indentação aqui
         return self.listReturn
 
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-
-    #ponto = DisplayFileItem("ponto", "point", (50,20))
-    #window.display_file.add_item(ponto)
-
-    #linha = DisplayFileItem("linha1", "line", (10,20,30,40))
-    #window.display_file.add_item(linha)
-    
-    #window.viewport.draw_items(window.display_file)
-
     window.setGeometry(100, 100, 800, 600)
     window.show()
-
     sys.exit(app.exec())
